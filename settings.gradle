@@ -1,0 +1,5 @@
+rootProject.name = 'google-tools'
+include 'rlaccess'
+include 'session-utils'
+include 'feed-explorer'
+include 'scripts'
