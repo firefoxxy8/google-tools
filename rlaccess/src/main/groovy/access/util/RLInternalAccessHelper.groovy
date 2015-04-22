@@ -1,9 +1,11 @@
 package access.util
-
 import groovy.json.JsonSlurper
 import groovy.sql.Sql
 import org.apache.tomcat.dbcp.dbcp.BasicDataSource
+import org.joda.time.DateTime
 import wslite.rest.RESTClient
+
+import java.text.SimpleDateFormat
 
 /**
  * Copy Right 2014 of Reach Local Inc.,
@@ -58,16 +60,21 @@ class RLInternalAccessHelper {
     }
 
     def getBingAccessToken(mccUsername) {
+        int retryCount = 50
+
         def bingSvcConfig = accessConfig.bingServices
         def reachlocalInternalAccessToken = bingSvcConfig.credentialAccessToken
         def bingSvcRestClient = new RESTClient("${bingSvcConfig.url}")
-
-        def resp = bingSvcRestClient.get(path:"/credentials/${URLEncoder.encode(username, 'UTF-8')}", headers: ["Authorization":"bearer ${reachlocalInternalAccessToken}"])
+        while(retryCount-- > 0){
+            def resp = bingSvcRestClient.get(path:"/credentials/${URLEncoder.encode(mccUsername, 'UTF-8')}", headers: ["Authorization":"bearer ${reachlocalInternalAccessToken}"])
 //        println resp.statusCode
-        def respContent = resp.contentAsString
-        def accessToken = new JsonSlurper().parseText(respContent).'access_token'
-//        println accessToken
-        accessToken
+            def respContent = resp.contentAsString
+            def accessToken = new JsonSlurper().parseText(respContent)
+            if(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ").parse(accessToken.expiry).after(new DateTime().plusMinutes(5).toDate()))
+                return accessToken
+            println "token expires within 5 minutes, ${accessToken.expiry}, retry"
+            sleep(6000)
+        }
     }
 
     def getGoogleAccessToken(username) {
@@ -91,33 +98,47 @@ class RLInternalAccessHelper {
         new JsonSlurper().parseText(respContent)
     }
 
-    def getBingCredentials (env environment) {
-        def bingCredentials = [:]
+
+    def getBingMasterCredentialsForCustomerAccount(env environment, accountId) {
+        def bingCredentials = []
         def accessSql
         switch(environment) {
-           case env.Analytics : accessSql = getAnalyticSql(); break
-           case env.QaUSNX1 : accessSql = getQaNX1Sql(); break;
-           default: throw new Exception("not supported currently")
+            case env.Analytics : accessSql = getAnalyticSql(); break
+            case env.QaUSNX1 : accessSql = getQaNX1Sql(); break;
+            default: throw new Exception("not supported currently")
         }
-        accessSql.eachRow ("select pea_username, pea_password, pea_account_id, pea_account_type, pea_key1 from WebPublisherExternalAccount where WebPublisher_idWebPublisher_FK in (17) and pea_account_type in ('master', 'license')") {
-            bingCredentials << [Username:it.pea_username.toString(), Password:it.pea_password.toString(), DevToken: it.pea_key1.toString()]
+        accessSql.eachRow ("select master.pea_username masterUsername, master.pea_key1 devToken from WebPublisherExternalAccount wpea " +
+                "join WebPublisherExternalAccount master on wpea.WebPublisherExternalAccount_idWebPublisherExternalAccount_par_FK = master.idWebPublisherExternalAccount " +
+                "where wpea.WebPublisher_idWebPublisher_FK=17 and master.pea_account_type='master' and wpea.pea_account_id=${accountId}") {
+            bingCredentials << [Username:it.masterUsername.toString(), DevToken: it.devToken.toString()]
         }
-        bingCredentials
+        bingCredentials[0]
     }
 
-    def getBingSecrets (customerAccountId) {
-        def bingCred = getBingCredentials(RLInternalAccessHelper.env.Analytics)
-        [bingAccessToken: bingAccessToken, bingDeveloperToken: bingCred.DevToken, bingCustomerAccountId:customerAccountId]
+    def getBingMasterCredentials(env environment) {
+        def bingCredentials = []
+        def accessSql
+        switch(environment) {
+            case env.Analytics : accessSql = getAnalyticSql(); break
+            case env.QaUSNX1 : accessSql = getQaNX1Sql(); break;
+            default: throw new Exception("not supported currently")
+        }
+        accessSql.eachRow ("select pea_username, pea_account_id, pea_account_type, pea_key1 from WebPublisherExternalAccount where WebPublisher_idWebPublisher_FK in (17) and pea_account_type in ('master')") {
+            bingCredentials << [Username:it.pea_username.toString(), DevToken: it.pea_key1.toString()]
+        }
+        bingCredentials[0]
     }
 
     def static main(args) {
         def helper = RLInternalAccessHelper.instance
         println "Testing access helper:"
-        println helper.getBingCredentials(RLInternalAccessHelper.env.Analytics)
+        println helper.getBingMasterCredentials(RLInternalAccessHelper.env.Analytics)
 
-        println helper.getBingSecrets(165221)
-        println helper.getGoogleAccessToken("testPublisher_QA@yahoo.com")
+        println helper.getBingMasterCredentialsForCustomerAccount(RLInternalAccessHelper.env.Analytics, 165221)
 
-        println helper.getQaNX1Sql('CAN').firstRow("select * from WebPublisher")
+        println helper.getGoogleAccessToken("google_B1_QA@reachlocal.biz")
+        println helper.getBingAccessToken("API_reachlocal")
+
+//        println helper.getQaNX1Sql('CAN').firstRow("select * from WebPublisher")
     }
 }

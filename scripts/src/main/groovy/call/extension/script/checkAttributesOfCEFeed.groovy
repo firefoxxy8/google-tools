@@ -6,7 +6,7 @@ import google.support.AdWordsSessionRLBuilder
 /**
  * Copy Right 2014 of Reach Local Inc.,
  */
-long WPC_ID = 961118L
+long WPC_ID = 3244886L
 
 def accessHelper = RLInternalAccessHelper.instance
 def sessionBuilder = new AdWordsSessionRLBuilder(_accessHelper: accessHelper, sqlToGetAuthInfo: accessHelper.getAnalyticSql("USA"))

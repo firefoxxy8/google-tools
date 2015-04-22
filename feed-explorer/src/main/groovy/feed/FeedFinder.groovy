@@ -233,10 +233,11 @@ class FeedFinder extends AdWordsSessionRLBuilder {
         FeedPage feedPage = feedService.get(new Selector(fields: FeedSelectableField.values().collect {it.value}.toArray(),
                 predicates: [new Predicate(FeedSelectableField.ORIGIN.value,
                                     PredicateOperator.EQUALS,
-                                    ["USER"] as String[]),
-                             new Predicate(FeedSelectableField.STATUS.value,
-                                     PredicateOperator.EQUALS,
-                                     ["ENABLED"] as String[])].toArray(Predicate[])
+                                    ["USER"] as String[]) //,
+//                             new Predicate(FeedSelectableField.STATUS.value,
+//                                     PredicateOperator.EQUALS,
+//                                     ["ENABLED"] as String[])
+                                    ].toArray(Predicate[])
         ) // close for Selector
         ) // close for FeedService.get
         feedPage.entries
